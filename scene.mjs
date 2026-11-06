@@ -1,0 +1,52 @@
+export class Scene{
+  constructor({onStatus}){this.onStatus=onStatus;this.center=[108.9422,34.2603];this.effect='none';this.low=matchMedia('(prefers-reduced-motion: reduce)').matches;this.canvas=document.querySelector('#weatherCanvas');this.ctx=this.canvas.getContext('2d');this.particles=[];this.tick=0;this.last=0;this.resize();new ResizeObserver(()=>this.resize()).observe(this.canvas);this.animate=this.animate.bind(this);requestAnimationFrame(this.animate);this.init();}
+  async init(){
+    try{
+      if(!window.maplibregl)throw new Error('地图组件未加载');
+      this.onStatus('正在铺开长安的街巷…');
+      const response=await fetch('https://tiles.openfreemap.org/styles/positron',{signal:AbortSignal.timeout(18000)});if(!response.ok)throw new Error('地图服务未响应');
+      const style=await response.json();
+      for(const l of style.layers){
+        l.paint??={};
+        if(l.type==='background')l.paint['background-color']='#203a37';
+        if(l.type==='raster'){l.layout={...l.layout,visibility:'none'};}
+        if(l.type==='fill'){l.paint['fill-color']=/water/.test(l.id)?'#345957':/park|landcover|landuse/.test(l.id)?'#294b3d':/building/.test(l.id)?'#5b7567':'#263f38';l.paint['fill-opacity']=1;if(l.paint['fill-outline-color'])l.paint['fill-outline-color']='#40584c';}
+        if(l.type==='line'){l.paint['line-color']=/water/.test(l.id)?'#3d6260':/boundary/.test(l.id)?'#78967a':/motorway|trunk|primary/.test(l.id)?'#9b9671':'#65755f';if(l.paint['line-opacity']!==undefined)l.paint['line-opacity']=.65;}
+        if(l.type==='symbol'){
+          if(/poi|housenumber/.test(l.id)){l.layout={...l.layout,visibility:'none'};continue;}
+          if(l.layout?.['text-field'])l.layout['text-field']=['coalesce',['get','name:zh'],['get','name']];
+          if(l.paint['text-color'])l.paint['text-color']='#b2c4a7';if(l.paint['text-halo-color'])l.paint['text-halo-color']='#274139';
+        }
+      }
+      const markerElement=this.marker?.getElement()||document.querySelector('.scene-center');
+      if(markerElement){this.marker?.remove();document.querySelector('.experience').append(markerElement);}
+      clearTimeout(this.timeout);this.map?.remove();
+      this.map=new maplibregl.Map({container:'map',style,center:this.center,zoom:16.2,pitch:58,bearing:-20,antialias:true,attributionControl:true,maxPitch:70,maxZoom:18.5,minZoom:3});
+      this.map.on('load',()=>{
+        const firstLabel=this.map.getStyle().layers.find(l=>l.type==='symbol')?.id;
+        this.map.addLayer({id:'nearby-buildings',type:'fill-extrusion',source:'openmaptiles','source-layer':'building',minzoom:13,paint:{'fill-extrusion-color':['interpolate',['linear'],['coalesce',['get','render_height'],8],0,'#678a79',25,'#89aa94',70,'#b3bea0'],'fill-extrusion-height':['case',['>', ['coalesce',['get','render_height'],0],0],['get','render_height'],9],'fill-extrusion-base':['coalesce',['get','render_min_height'],0],'fill-extrusion-opacity':.93}},firstLabel);
+        this.map.setLight({anchor:'viewport',color:'#fff4d2',intensity:.55,position:[1.5,160,50]});
+        const el=document.querySelector('.scene-center');el.style.position='relative';el.style.left='auto';el.style.top='auto';
+        this.marker=new maplibregl.Marker({element:el,anchor:'top'}).setLngLat(this.center).addTo(this.map);
+        this.focus(false);this.onStatus('真实地图 · 正在读取建筑轮廓');
+        this.map.once('idle',()=>this.reportCoverage());
+      });
+      this.map.on('moveend',()=>this.reportCoverage());
+      let errorShown=false;this.map.on('error',()=>{if(!errorShown){errorShown=true;this.onStatus('部分地图数据未载入，可重试或稍后查看',true);}});
+      this.timeout=setTimeout(()=>{if(!this.map?.isStyleLoaded())this.onStatus('地图加载较慢，天气预报仍可使用',true);},20000);
+    }catch(e){this.onStatus('地图暂不可用，请检查网络后重试',true);}
+  }
+  reportCoverage(){if(!this.map?.getLayer('nearby-buildings'))return;const n=this.map.queryRenderedFeatures({layers:['nearby-buildings']}).length;this.onStatus(n?'真实建筑轮廓 · 部分高度为示意':'此视野建筑数据较少 · 可拖动或放大地图');}
+  focus(animated=true){if(!this.map)return;const mobile=innerWidth<680;this.map.flyTo({center:this.center,zoom:16.2,padding:mobile?{left:30,right:0,top:200,bottom:90}:{left:250,right:40,top:20,bottom:30},duration:animated&&!this.low?1300:0});}
+  setLocation(lon,lat){this.center=[lon,lat];this.marker?.setLngLat(this.center);this.focus();}
+  toggleTilt(){if(!this.map)return true;const tilted=this.map.getPitch()<10;this.map.easeTo({pitch:tilted?58:0,bearing:tilted?-20:0,duration:this.low?0:800});return tilted;}
+  setEffect(effect,wind=0,precip=0){this.effect=effect;this.wind=Math.min(10,Math.max(0,wind||0))/10;this.intensity=Math.min(1,Math.max(.3,(precip||.6)/4));document.querySelector('#fog').style.opacity=effect==='fog'?.8:effect==='cloud'?.12:effect==='rain'?.22:0;this.particles=[];}
+  setLow(value){this.low=value;this.particles=[];}
+  resize(){const b=this.canvas.getBoundingClientRect();this.w=b.width;this.h=b.height;const d=Math.min(devicePixelRatio||1,2);this.canvas.width=b.width*d;this.canvas.height=b.height*d;this.ctx.setTransform(d,0,0,d,0,0);this.particles=[];}
+  particle(randomY=false){return{x:Math.random()*(this.w+200)-100,y:randomY?Math.random()*this.h:-30,z:.3+Math.random()*.7,s:Math.random()*6};}
+  animate(now){requestAnimationFrame(this.animate);if(document.hidden)return;if(now-this.last<(this.low?65:30))return;const dt=Math.min((now-this.last)/16.67,4);this.last=now;const c=this.ctx;c.clearRect(0,0,this.w,this.h);if(!['rain','snow','sun'].includes(this.effect))return;
+    if(this.effect==='sun'){const g=c.createRadialGradient(this.w*.8,0,0,this.w*.8,0,this.w*.65);g.addColorStop(0,'#f2d89555');g.addColorStop(1,'#f2d89500');c.fillStyle=g;c.fillRect(0,0,this.w,this.h);return;}
+    const snow=this.effect==='snow';const target=this.low?35:snow?125:Math.round(140+this.intensity*150);while(this.particles.length<target)this.particles.push(this.particle(true));
+    for(let i=0;i<this.particles.length;i++){let p=this.particles[i];p.y+=(snow?.6:11)*p.z*dt;p.x+=(snow?Math.sin(now/1800+p.s)*.35:1.4+this.wind)*p.z*dt;if(p.y>this.h+25||p.x>this.w+100)this.particles[i]=p=this.particle();c.beginPath();if(snow){c.fillStyle=`rgba(239,246,239,${p.z*.8})`;c.arc(p.x,p.y,1+p.z*2,0,Math.PI*2);c.fill();}else{c.strokeStyle=`rgba(207,231,224,${p.z*.4})`;c.lineWidth=.5+p.z*.5;c.moveTo(p.x,p.y);c.lineTo(p.x-(1.5+this.wind)*p.z,p.y-17*p.z);c.stroke();}}
+  }
+}

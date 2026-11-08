@@ -34,3 +34,13 @@
 }
 .scene-title{top:70px}.scene-title strong{margin:8px 0}.scene-title small{display:inline-block;background:#edf3e9ad;padding:3px 10px;border-radius:12px}
 @media(max-width:680px){.scene-title{top:267px}.scene-title strong{margin:6px 0}}
+/* A quiet blossom scene. Decorative layers never intercept map gestures. */
+.experience{background:#e7e9df;box-shadow:0 18px 48px #927f7217;border-color:#e0e1d3}
+.experience[data-petals=true] .map-shade{background:radial-gradient(ellipse at 83% 18%,#f7d4dd55,transparent 51%),radial-gradient(ellipse at 18% 80%,#fbedd03b,transparent 48%),linear-gradient(0deg,#edf0e4bb,transparent 25%)}
+.experience[data-petals=true][data-weather=rain] .map-shade{background:radial-gradient(ellipse at 83% 18%,#f7d4dd33,transparent 51%),linear-gradient(0deg,#d9e5e999,transparent 35%),linear-gradient(#a6bed114,#b5cbd322)}
+.experience[data-petals=true][data-weather=snow] .map-shade{background:radial-gradient(ellipse at 83% 18%,#f7d4dd44,transparent 51%),linear-gradient(#edf1ff22,#f8fbff77)}
+.blossom-branch{position:absolute;width:220px;height:auto;right:21px;top:115px;z-index:2;pointer-events:none;opacity:.8;filter:drop-shadow(0 4px 8px #c69daf15);transition:opacity .5s}
+.experience[data-petals=false] .blossom-branch{opacity:0}.scene-title{color:#73786a}.scene-title strong{font-size:24px;letter-spacing:4px}.scene-title>span{color:#a19287;font-size:8px;letter-spacing:3.5px}.scene-title small{background:#faf7ebc9;color:#879183;border:1px solid #e2dfcf88}.weather-card{background:linear-gradient(145deg,#fffdf3f2,#fbf7eceb)}.weather-pet{background:linear-gradient(135deg,#fff7eeed,#f9f4e8ed)}
+#petalBtn{border-left:1px solid #ddcbd0;margin-left:3px;border-radius:7px;color:#ad768a;white-space:nowrap}#petalBtn[aria-pressed=true]{color:#935c73;background:#f1dce3}.effect-picker{box-shadow:0 3px 13px #b5968810}
+@media(max-width:1000px) and (min-width:681px){.blossom-branch{width:150px;top:132px;right:14px}.scene-title strong{font-size:21px}}
+@media(max-width:680px){.blossom-branch{top:367px;right:5px;width:105px;opacity:.65}.scene-title strong{font-size:18px;letter-spacing:2px}.scene-title>span{font-size:7px;letter-spacing:2px}.effect-picker{gap:1px}.effect-picker>span{display:none}.effect-picker button{flex:1;padding:7px 6px;font-size:10px}#petalBtn{margin-left:2px;padding-left:8px}.map-bottom p{line-height:1.65;max-width:100%;font-size:7px}.map-caption{max-width:calc(100% - 48px)}}

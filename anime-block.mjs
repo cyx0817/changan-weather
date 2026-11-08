@@ -117,12 +117,19 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
   const edge=crown(x,y,2.9);
   if(!parks.some(p=>edge.every(v=>inPolygon(v,p)))||occupied.some(p=>edge.some(v=>inPolygon(v,p))||inPolygon([x,y],p)))continue;
   trees++;
-  add([crown(x,y,.32)],'tree',0,2.6,'#9c8771');
-  const leaf=trees%3===0?'#9eba89':trees%3===1?'#87af8b':'#b5c899';
-  add([crown(x,y,2.3)],'tree',1.9,3.4,leaf);
-  add([crown(x,y,2.9)],'tree',2.6,4.1,leaf);
-  add([crown(x,y,2.1)],'tree',4.1,5.1,leaf);
-  add([crown(x,y,1.2)],'tree',5.1,5.6,leaf);
+  add([crown(x,y,.24)],'tree',0,3.5,'#a78b79');
+  const blooming=trees%3!==0;
+  // Five small crowns make a rounder, layered silhouette than a single stack.
+  const palette=blooming?['#e9afc1','#f3c8d3','#f8dce0']:['#9bb892','#b6caa2','#c3d4ad'];
+  for(const [dx,dy,z,r] of [[-1.1,0,2.7,1.65],[1.1,.2,3,1.6],[0,-1,3.1,1.7],[.1,1.1,3.2,1.65],[0,0,4.2,1.65]]){
+   add([crown(x+dx,y+dy,r*.74)],'tree',z,z+.6,palette[0]);
+   add([crown(x+dx,y+dy,r)],'tree',z+.6,z+1.25,palette[1]);
+   add([crown(x+dx,y+dy,r*.65)],'tree',z+1.25,z+1.7,palette[2]);
+  }
+  if(blooming)for(let i=0;i<9;i++){
+   const a=i*2.4+trees,r=1.5+(i%3)*.4;
+   add([crown(x+Math.cos(a)*r,y+Math.sin(a)*r,.17)],'tree',.02,.055,i%2?'#e9b3c4':'#f5d1db');
+  }
  }
  return {type:'FeatureCollection',features};
 }

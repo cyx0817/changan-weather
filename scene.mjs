@@ -1,6 +1,7 @@
-import {nearbyArea} from './nearby.mjs';
+import {nearbyArea,NEARBY_RADIUS} from './nearby.mjs';
+import {buildAnimeBlock} from './anime-block.mjs';
 export class Scene{
-  constructor({onStatus}){this.onStatus=onStatus;this.center=[108.9422,34.2603];this.effect='none';this.low=matchMedia('(prefers-reduced-motion: reduce)').matches;this.canvas=document.querySelector('#weatherCanvas');this.ctx=this.canvas.getContext('2d');this.particles=[];this.tick=0;this.last=0;this.resize();new ResizeObserver(()=>this.resize()).observe(this.canvas);this.animate=this.animate.bind(this);requestAnimationFrame(this.animate);this.init();}
+  constructor({onStatus}){this.onStatus=onStatus;this.center=[108.94238,34.26101];this.effect='none';this.low=matchMedia('(prefers-reduced-motion: reduce)').matches;this.canvas=document.querySelector('#weatherCanvas');this.ctx=this.canvas.getContext('2d');this.particles=[];this.tick=0;this.last=0;this.resize();new ResizeObserver(()=>this.resize()).observe(this.canvas);this.animate=this.animate.bind(this);requestAnimationFrame(this.animate);this.init();}
   async init(){
     try{
       if(!window.maplibregl)throw new Error('地图组件未加载');
@@ -9,58 +10,73 @@ export class Scene{
       const style=await response.json();
       for(const l of style.layers){
         l.paint??={};
-        if(l.type==='background')l.paint['background-color']='#203a37';
+        if(l.type==='background')l.paint['background-color']='#e9eadb';
         if(l.type==='raster'){l.layout={...l.layout,visibility:'none'};}
-        if(l.type==='fill'){l.paint['fill-color']=/water/.test(l.id)?'#345957':/park|landcover|landuse/.test(l.id)?'#294b3d':/building/.test(l.id)?'#5b7567':'#263f38';l.paint['fill-opacity']=1;if(l.paint['fill-outline-color'])l.paint['fill-outline-color']='#40584c';}
-        if(l.type==='line'){l.paint['line-color']=/water/.test(l.id)?'#3d6260':/boundary/.test(l.id)?'#78967a':/motorway|trunk|primary/.test(l.id)?'#9b9671':'#65755f';if(l.paint['line-opacity']!==undefined)l.paint['line-opacity']=.65;}
+        if(l.type==='fill'){l.paint['fill-color']=/water/.test(l.id)?'#a8d4d8':/park|landcover|landuse/.test(l.id)?'#b8d0aa':/building/.test(l.id)?'#dbcbb6':'#e4e4ce';l.paint['fill-opacity']=1;if(l.paint['fill-outline-color'])l.paint['fill-outline-color']='#b6bea4';if(/building/.test(l.id))l.layout={...l.layout,visibility:'none'};}
+        if(l.type==='line'){l.paint['line-color']=/water/.test(l.id)?'#82bbc4':/boundary/.test(l.id)?'#b3bea1':/casing/.test(l.id)?'#c3bca6':/path|pedestrian|footway/.test(l.id)?'#f8edcf':/rail/.test(l.id)?'#9caca6':'#f7f2df';if(l.paint['line-opacity']!==undefined)l.paint['line-opacity']=.95;}
         if(l.type==='symbol'){
-          if(/poi|housenumber/.test(l.id)){l.layout={...l.layout,visibility:'none'};continue;}
+          if(!/road|water/.test(l.id)){l.layout={...l.layout,visibility:'none'};continue;}
           if(l.layout?.['text-field'])l.layout['text-field']=['coalesce',['get','name:zh'],['get','name']];
-          if(l.paint['text-color'])l.paint['text-color']='#b2c4a7';if(l.paint['text-halo-color'])l.paint['text-halo-color']='#274139';
+          if(l.paint['text-color'])l.paint['text-color']='#687b74';if(l.paint['text-halo-color'])l.paint['text-halo-color']='#f7f2df';
         }
       }
       const markerElement=this.marker?.getElement()||document.querySelector('.scene-center');
       if(markerElement){this.marker?.remove();document.querySelector('.experience').append(markerElement);}
       clearTimeout(this.timeout);this.map?.remove();
-      this.map=new maplibregl.Map({container:'map',style,center:this.center,zoom:16.8,pitch:48,bearing:-20,antialias:true,attributionControl:true,maxPitch:55,maxZoom:19,minZoom:15.5,maxBounds:nearbyArea(this.center).bounds,renderWorldCopies:false});
+      this.modelKey='';
+      this.map=new maplibregl.Map({container:'map',style,center:this.center,zoom:18.6,pitch:52,bearing:-28,antialias:true,attributionControl:true,maxPitch:65,maxZoom:21,minZoom:16.5,renderWorldCopies:false});
       this.map.on('load',()=>{
         const firstLabel=this.map.getStyle().layers.find(l=>l.type==='symbol')?.id;
-        this.map.addLayer({id:'nearby-buildings',type:'fill-extrusion',source:'openmaptiles','source-layer':'building',minzoom:13,paint:{'fill-extrusion-color':['interpolate',['linear'],['coalesce',['get','render_height'],8],0,'#678a79',25,'#89aa94',70,'#b3bea0'],'fill-extrusion-height':['case',['>', ['coalesce',['get','render_height'],0],0],['get','render_height'],9],'fill-extrusion-base':['coalesce',['get','render_min_height'],0],'fill-extrusion-opacity':.93}},firstLabel);
-        this.map.setLight({anchor:'viewport',color:'#fff4d2',intensity:.55,position:[1.5,160,50]});
+        // A transparent tile layer ensures building tiles remain available to query.
+        this.map.addLayer({id:'building-footprints',type:'fill',source:'openmaptiles','source-layer':'building',paint:{'fill-opacity':0}},firstLabel);
+        this.map.addSource('anime-block',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:20,tolerance:0});
+        this.map.addLayer({id:'building-shadows',type:'fill',source:'anime-block',filter:['==',['get','kind'],'shadow'],paint:{'fill-color':'#617e79','fill-opacity':.19}},firstLabel);
+        this.map.addLayer({id:'nearby-buildings',type:'fill-extrusion',source:'anime-block',filter:['!=',['get','kind'],'shadow'],paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':1,'fill-extrusion-vertical-gradient':false}},firstLabel);
+        this.map.setLight({anchor:'map',color:'#fff4df',intensity:.42,position:[1.5,210,35]});
         const el=document.querySelector('.scene-center');el.style.position='relative';el.style.left='auto';el.style.top='auto';
         this.marker=new maplibregl.Marker({element:el,anchor:'top'}).setLngLat(this.center).addTo(this.map);
         this.updateArea();this.map.addControl(new maplibregl.ScaleControl({maxWidth:100,unit:'metric'}),'bottom-left');
-        this.focus(false);this.onStatus('周围 1000 米 · 正在读取建筑轮廓');
-        this.map.once('idle',()=>this.reportCoverage());
+        this.onStatus('身边 100 米 · 正在搭建动漫街区');this.focus(false);
+        this.map.on('idle',()=>this.updateModels());
+        this.map.on('click','nearby-buildings',()=>{document.querySelector('#sceneHint').textContent='建筑位置来自真实地图 · 屋顶、窗户和高度为艺术化表现';});
       });
-      this.map.on('moveend',()=>this.reportCoverage());
+      this.map.on('moveend',()=>this.updateModels());
       let errorShown=false;this.map.on('error',()=>{if(!errorShown){errorShown=true;this.onStatus('部分地图数据未载入，可重试或稍后查看',true);}});
       this.timeout=setTimeout(()=>{if(!this.map?.isStyleLoaded())this.onStatus('地图加载较慢，天气预报仍可使用',true);},20000);
     }catch(e){this.onStatus('地图暂不可用，请检查网络后重试',true);}
   }
-  reportCoverage(){if(!this.map?.getLayer('nearby-buildings'))return;const n=this.map.queryRenderedFeatures({layers:['nearby-buildings']}).length;this.onStatus(n?'真实建筑轮廓 · 部分高度为示意':'此视野建筑数据较少 · 可拖动或放大地图');}
+  updateModels(){
+    if(!this.map?.getSource('anime-block'))return;
+    const footprints=this.map.querySourceFeatures('openmaptiles',{sourceLayer:'building',filter:['<=',['distance',{type:'Point',coordinates:this.center}],NEARBY_RADIUS]});
+    const green=[...this.map.querySourceFeatures('openmaptiles',{sourceLayer:'park'}),...this.map.querySourceFeatures('openmaptiles',{sourceLayer:'landcover',filter:['in','class','wood','grass']})];
+    const key=JSON.stringify([this.center,footprints.map(f=>[f.geometry,f.properties]),green.map(f=>f.geometry)]);
+    if(key===this.modelKey)return;this.modelKey=key;
+    const model=buildAnimeBlock(footprints,this.center,NEARBY_RADIUS,green);this.map.getSource('anime-block').setData(model);
+    const n=model.features.filter(f=>f.properties.kind==='wall').length;
+    this.onStatus(n?'真实街区 · 动漫风 3D 建筑':'100 米内建筑数据较少 · 可换个位置看看');
+  }
   updateArea(){
     if(!this.map?.getLayer('nearby-buildings'))return;
-    const area=nearbyArea(this.center);this.map.setMaxBounds(area.bounds);
+    const area=nearbyArea(this.center);this.map.setMaxBounds(nearbyArea(this.center,250).bounds);
     this.area=area;
-    // within() only evaluates points/lines; distance() also supports building polygons.
-    this.map.setFilter('nearby-buildings',['<=',['distance',{type:'Point',coordinates:this.center}],1000]);
+    this.modelKey='';this.map.getSource('anime-block').setData({type:'FeatureCollection',features:[]});
     if(this.map.getSource('nearby-circle')){this.map.getSource('nearby-circle').setData(area.circle);this.map.getSource('nearby-mask').setData(area.mask);return;}
     this.map.addSource('nearby-circle',{type:'geojson',data:area.circle});
     this.map.addSource('nearby-mask',{type:'geojson',data:area.mask});
-    this.map.addLayer({id:'nearby-mask',type:'fill',source:'nearby-mask',paint:{'fill-color':'#203a37','fill-opacity':1}});
-    this.map.addLayer({id:'nearby-border',type:'line',source:'nearby-circle',paint:{'line-color':'#dfcf9c','line-width':2,'line-dasharray':[3,3],'line-opacity':.75}});
+    this.map.addLayer({id:'nearby-mask',type:'fill',source:'nearby-mask',paint:{'fill-color':'#dce8e3','fill-opacity':1}});
+    this.map.addLayer({id:'nearby-border',type:'line',source:'nearby-circle',paint:{'line-color':'#8eaaa0','line-width':3,'line-opacity':.6}});
   }
-  focus(animated=true){if(!this.map)return;const mobile=innerWidth<680;this.map.flyTo({center:this.center,zoom:16.8,padding:mobile?{left:0,right:0,top:130,bottom:60}:{left:270,right:60,top:30,bottom:70},duration:animated&&!this.low?1000:0});}
+  focus(animated=true){if(!this.map)return;const mobile=innerWidth<680;this.map.flyTo({center:this.center,zoom:mobile?16.9:17.7,padding:mobile?{left:0,right:0,top:20,bottom:0}:{left:170,right:0,top:0,bottom:30},duration:animated&&!this.low?1000:0});}
   setLocation(lon,lat){this.center=[lon,lat];this.marker?.setLngLat(this.center);this.updateArea();this.focus();}
-  toggleTilt(){if(!this.map)return true;const tilted=this.map.getPitch()<10;this.map.easeTo({pitch:tilted?48:0,bearing:tilted?-20:0,duration:this.low?0:800});return tilted;}
-  setEffect(effect,wind=0,precip=0){this.effect=effect;this.wind=Math.min(10,Math.max(0,wind||0))/10;this.intensity=Math.min(1,Math.max(.3,(precip||.6)/4));document.querySelector('#fog').style.opacity=effect==='fog'?.8:effect==='cloud'?.12:effect==='rain'?.22:0;this.particles=[];}
+  toggleTilt(){if(!this.map)return true;const tilted=this.map.getPitch()<10;this.map.easeTo({pitch:tilted?52:0,bearing:tilted?-28:0,duration:this.low?0:800});return tilted;}
+  rotate(){if(this.map)this.map.easeTo({bearing:this.map.getBearing()+45,duration:this.low?0:600});}
+  setEffect(effect,wind=0,precip=0){this.effect=effect;document.querySelector('.experience').dataset.weather=effect;this.wind=Math.min(10,Math.max(0,wind||0))/10;this.intensity=Math.min(1,Math.max(.3,(precip||.6)/4));document.querySelector('#fog').style.opacity=effect==='fog'?.8:effect==='cloud'?.12:effect==='rain'?.22:0;this.particles=[];}
   setLow(value){this.low=value;this.particles=[];}
   resize(){const b=this.canvas.getBoundingClientRect();this.w=b.width;this.h=b.height;const d=Math.min(devicePixelRatio||1,2);this.canvas.width=b.width*d;this.canvas.height=b.height*d;this.ctx.setTransform(d,0,0,d,0,0);this.particles=[];}
   particle(randomY=false){return{x:Math.random()*(this.w+200)-100,y:randomY?Math.random()*this.h:-30,z:.3+Math.random()*.7,s:Math.random()*6};}
   animate(now){requestAnimationFrame(this.animate);if(document.hidden)return;if(now-this.last<(this.low?65:30))return;const dt=Math.min((now-this.last)/16.67,4);this.last=now;const c=this.ctx;c.clearRect(0,0,this.w,this.h);if(!['rain','snow','sun'].includes(this.effect))return;
     if(this.effect==='sun'){const g=c.createRadialGradient(this.w*.8,0,0,this.w*.8,0,this.w*.65);g.addColorStop(0,'#f2d89555');g.addColorStop(1,'#f2d89500');c.fillStyle=g;c.fillRect(0,0,this.w,this.h);return;}
     const snow=this.effect==='snow';const target=this.low?35:snow?125:Math.round(140+this.intensity*150);while(this.particles.length<target)this.particles.push(this.particle(true));
-    for(let i=0;i<this.particles.length;i++){let p=this.particles[i];p.y+=(snow?.6:11)*p.z*dt;p.x+=(snow?Math.sin(now/1800+p.s)*.35:1.4+this.wind)*p.z*dt;if(p.y>this.h+25||p.x>this.w+100)this.particles[i]=p=this.particle();c.beginPath();if(snow){c.fillStyle=`rgba(239,246,239,${p.z*.8})`;c.arc(p.x,p.y,1+p.z*2,0,Math.PI*2);c.fill();}else{c.strokeStyle=`rgba(207,231,224,${p.z*.4})`;c.lineWidth=.5+p.z*.5;c.moveTo(p.x,p.y);c.lineTo(p.x-(1.5+this.wind)*p.z,p.y-17*p.z);c.stroke();}}
+    for(let i=0;i<this.particles.length;i++){let p=this.particles[i];p.y+=(snow?.6:11)*p.z*dt;p.x+=(snow?Math.sin(now/1800+p.s)*.35:1.4+this.wind)*p.z*dt;if(p.y>this.h+25||p.x>this.w+100)this.particles[i]=p=this.particle();c.beginPath();if(snow){c.fillStyle=`rgba(239,246,239,${p.z*.8})`;c.arc(p.x,p.y,1+p.z*2,0,Math.PI*2);c.fill();}else{c.strokeStyle=`rgba(77,124,153,${p.z*.65})`;c.lineWidth=.5+p.z*.5;c.moveTo(p.x,p.y);c.lineTo(p.x-(1.5+this.wind)*p.z,p.y-17*p.z);c.stroke();}}
   }
 }

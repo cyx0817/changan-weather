@@ -50,3 +50,4 @@
 .scene-title{top:76px;left:285px;right:195px}.scene-title>span{display:none}.scene-title strong{font-size:20px;text-shadow:0 1px 10px #fff,0 1px 4px #fff}.scene-title small{background:#fff9ece8}
 @media(min-width:681px){#map{left:270px}.weather-pet{right:75px;bottom:115px}.blossom-branch{width:150px;top:130px}.map-caption{max-width:230px}}
 @media(max-width:680px){.scene-title{top:278px;left:12px;right:12px}.scene-title strong{font-size:17px}.map-top-right{max-width:167px}.radius-badge{font-size:8px;padding:7px}.blossom-branch{width:85px;opacity:.45}}
+.location-status{margin:-12px 0 16px;padding:9px 13px;background:#edf0e5;border:1px solid #dce2d3;border-radius:9px;color:#607260;font-size:11px;line-height:1.7}@media(max-width:680px){.location-status{margin:-5px 0 12px;font-size:10px}}

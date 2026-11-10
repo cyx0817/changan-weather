@@ -3,6 +3,7 @@ import {WeatherPet} from './pet.mjs';
 import {Scene} from './scene.mjs';
 import {CloudVoice} from './cloud-voice.mjs';
 import {PersonalAudio} from './audio.mjs';
+import {createLocator} from './location.mjs';
 const $=s=>document.querySelector(s);
 let toastTimer;function toast(text){$('#toast').textContent=text;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,5500);}
 const places={bell:{name:'西安 · 钟楼',short:'钟楼附近',lat:34.26101,lon:108.94238},pagoda:{name:'西安 · 大雁塔',short:'大雁塔附近',lat:34.2183,lon:108.9596},wall:{name:'西安 · 永宁门',short:'永宁门附近',lat:34.2514,lon:108.9421}};
@@ -14,6 +15,12 @@ const stopLocal=personal.stopPlayback.bind(personal);personal.stopPlayback=()=>{
 function voiceTab(isCloud){$('#localVoicePanel').hidden=isCloud;$('#cloudVoicePanel').hidden=!isCloud;$('#localVoiceTab').setAttribute('aria-pressed',String(!isCloud));$('#cloudVoiceTab').setAttribute('aria-pressed',String(isCloud));}
 $('#localVoiceTab').onclick=()=>voiceTab(false);$('#cloudVoiceTab').onclick=()=>voiceTab(true);
 const pet=new WeatherPet();pet.setLow(scene.low);
+const locator=createLocator({geolocation:navigator.geolocation,
+ onPending(){for(const id of ['#locateBtn','#nearbyLocate'])$(id).disabled=true;$('#locateBtn').textContent='正在定位…';$('#locationStatus').textContent='请允许浏览器定位，正在寻找你的位置…';},
+ onSettled(){for(const id of ['#locateBtn','#nearbyLocate'])$(id).disabled=false;$('#locateBtn').textContent='◎ 使用我的位置';},
+ onSuccess(p){setPlace({name:'我的位置',short:'你在这里',lat:p.lat,lon:p.lon});const accuracy=p.accuracy===null?'设备未提供精度':`定位精度约 ${Math.round(p.accuracy)} 米`;$('#locationStatus').textContent=`已定位到你身边 · ${accuracy}`;toast(p.accuracy>100?'设备定位较粗略，街景可能偏离实际位置。可在手机上开启精确定位后重试。':'已切换到你所在位置的天气与 100 米内街景。');},
+ onError(reason){const text={denied:'未获定位权限，请在浏览器设置中允许位置后重试',timeout:'定位超时，请重试或开启手机定位',unsupported:'此浏览器不支持定位，可手动选择地点',invalid:'未取得有效位置，请重试',unavailable:'暂时无法定位，请检查设备的位置服务'}[reason];$('#locationStatus').textContent=`${text} · 当前为${place.name==='我的位置'?'上次定位位置':place.short||place.name}`;toast(text);}
+});
 $('#todayDate').textContent=new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long',timeZone:'Asia/Shanghai'}).format(new Date());
 $('#petalBtn').setAttribute('aria-pressed',String(scene.petals));
 $('#motionBtn').setAttribute('aria-pressed',String(scene.low));$('#motionBtn').textContent=scene.low?'轻量模式 · 开':'轻量模式';
@@ -34,7 +41,7 @@ async function loadWeather(){
   catch(e){if(id!==requestId)return;$('#condition').textContent='天气暂不可用';$('#weatherTime').textContent='连接未完成';$('#weatherMessage').textContent='请检查网络，点击右上角 ↻ 重试。你仍可以体验雨雪效果。';$('#weatherSource').textContent='尚未获取数据 · 未显示虚构天气';$('#hourly').replaceChildren(el('p','loading-text','逐小时预报暂不可用，请刷新天气。'));$('#daily').replaceChildren(el('p','loading-text','七日预报暂不可用，请刷新天气。'));}
   finally{clearTimeout(timeout);if(id===requestId)$('#refreshBtn').disabled=false;}
 }
-function setPlace(next){personal.stopPlayback();place=next;$('#placeName').textContent=place.name;$('#nearbyLocate small').textContent=place.name==='我的位置'?'已定位 · 100 米内近景':`目前为${place.short||place.name}`;$('#pinLabel').textContent=place.short||place.name;$('#locationPanel').hidden=true;scene.setLocation(place.lon,place.lat);effect='live';loadWeather();}
+function setPlace(next){locator.cancel();personal.stopPlayback();place=next;$('#placeName').textContent=place.name;$('#locationStatus').textContent=`正在查看：${place.name}`;$('#nearbyLocate small').textContent=place.name==='我的位置'?'已定位 · 100 米内近景':`目前为${place.short||place.name}`;$('#pinLabel').textContent=place.short||place.name;$('#locationPanel').hidden=true;scene.setLocation(place.lon,place.lat);effect='live';loadWeather();}
 $('#refreshBtn').onclick=()=>{personal.stopPlayback();loadWeather();};$('#nowBtn').onclick=backNow;
 $('#timeSlider').oninput=e=>{selectHour(+e.target.value);const b=document.querySelector(`.hour[data-index="${selected}"]`);if(b)$('#hourly').scrollTo({left:b.offsetLeft-$('#hourly').offsetLeft-30,behavior:scene.low?'instant':'smooth'});};
 document.querySelectorAll('[data-effect]').forEach(b=>b.onclick=()=>{effect=b.dataset.effect;syncEffect();});
@@ -45,11 +52,12 @@ $('#tiltBtn').onclick=()=>{const active=scene.toggleTilt();$('#tiltBtn').textCon
 $('#locationBtn').onclick=()=>$('#locationPanel').hidden=!$('#locationPanel').hidden;
 document.addEventListener('click',e=>{if(!e.target.closest('.location-wrap'))$('#locationPanel').hidden=true;});
 document.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>setPlace(places[b.dataset.place]));
-$('#locateBtn').onclick=()=>{if(!navigator.geolocation){toast('此浏览器无法定位，可以搜索城市。');return;}$('#locateBtn').disabled=true;$('#locateBtn').textContent='正在定位…';navigator.geolocation.getCurrentPosition(p=>{$('#locateBtn').disabled=false;$('#locateBtn').textContent='◎ 使用我的位置';setPlace({name:'我的位置',short:'你在这里',lat:p.coords.latitude,lon:p.coords.longitude});toast(`已显示 100 米内近景。定位精度约 ${Math.round(p.coords.accuracy)} 米。`);},()=>{$('#locateBtn').disabled=false;$('#locateBtn').textContent='◎ 使用我的位置';toast('未能获取位置，可以继续查看西安或搜索城市。');},{enableHighAccuracy:true,timeout:15000,maximumAge:60000});};
+$('#locateBtn').onclick=()=>locator.start();
 $('#nearbyLocate').onclick=()=>$('#locateBtn').click();
 let searchId=0;$('#searchForm').onsubmit=async e=>{e.preventDefault();const name=$('#searchInput').value.trim();if(name.length<2)return;searchController?.abort();searchController=new AbortController();const id=++searchId;const c=searchController;const timer=setTimeout(()=>c.abort(),12000);$('#searchResults').replaceChildren(el('p','loading-text','正在查找…'));try{const url=new URL('https://geocoding-api.open-meteo.com/v1/search');url.search=new URLSearchParams({name,count:5,language:'zh',format:'json'});const r=await fetch(url,{signal:c.signal});if(!r.ok)throw Error();const j=await r.json();if(id!==searchId)return;$('#searchResults').replaceChildren();if(!j.results?.length){$('#searchResults').append(el('p','loading-text','没有找到，请尝试城市拼音或英文名称。'));return;}for(const p of j.results){const b=el('button','search-result',[p.name,p.admin1,p.country].filter(Boolean).join(' · '));b.type='button';b.onclick=()=>setPlace({name:p.name,short:p.name,lat:p.latitude,lon:p.longitude});$('#searchResults').append(b);}}catch{if(id===searchId)$('#searchResults').replaceChildren(el('p','loading-text','搜索暂不可用，请稍后再试。'));}finally{clearTimeout(timer);}};
 function openVoice(){stopLocal();$('#voiceDialog').showModal();}$('#voiceBtn').onclick=openVoice;$('#recordPromo').onclick=openVoice;$('#aboutBtn').onclick=()=>$('#aboutDialog').showModal();document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());for(const d of document.querySelectorAll('dialog'))d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)personal.stopPlayback();});
 setInterval(()=>{if(!document.hidden&&selected===null&&effect==='live')loadWeather();},15*60*1000);
 loadWeather();
+locator.start();
 

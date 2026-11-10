@@ -44,3 +44,9 @@
 #petalBtn{border-left:1px solid #ddcbd0;margin-left:3px;border-radius:7px;color:#ad768a;white-space:nowrap}#petalBtn[aria-pressed=true]{color:#935c73;background:#f1dce3}.effect-picker{box-shadow:0 3px 13px #b5968810}
 @media(max-width:1000px) and (min-width:681px){.blossom-branch{width:150px;top:132px;right:14px}.scene-title strong{font-size:21px}}
 @media(max-width:680px){.blossom-branch{top:367px;right:5px;width:105px;opacity:.65}.scene-title strong{font-size:18px;letter-spacing:2px}.scene-title>span{font-size:7px;letter-spacing:2px}.effect-picker{gap:1px}.effect-picker>span{display:none}.effect-picker button{flex:1;padding:7px 6px;font-size:10px}#petalBtn{margin-left:2px;padding-left:8px}.map-bottom p{line-height:1.65;max-width:100%;font-size:7px}.map-caption{max-width:calc(100% - 48px)}}
+/* Full-frame close street view; the camera, not a circular cutout, limits range. */
+#map{opacity:1}.map-shade{opacity:.48}.experience[data-petals=true] .map-shade{opacity:.5}
+.map-controls button:disabled{cursor:default;opacity:.35}.radius-badge{font-variant-numeric:tabular-nums;font-size:10px}
+.scene-title{top:76px;left:285px;right:195px}.scene-title>span{display:none}.scene-title strong{font-size:20px;text-shadow:0 1px 10px #fff,0 1px 4px #fff}.scene-title small{background:#fff9ece8}
+@media(min-width:681px){#map{left:270px}.weather-pet{right:75px;bottom:115px}.blossom-branch{width:150px;top:130px}.map-caption{max-width:230px}}
+@media(max-width:680px){.scene-title{top:278px;left:12px;right:12px}.scene-title strong{font-size:17px}.map-top-right{max-width:167px}.radius-badge{font-size:8px;padding:7px}.blossom-branch{width:85px;opacity:.45}}

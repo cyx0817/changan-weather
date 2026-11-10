@@ -1,4 +1,4 @@
-import {nearbyArea,NEARBY_RADIUS} from './nearby.mjs';
+import {NEARBY_RADIUS,closeViewZoom,viewSpanMeters} from './nearby.mjs';
 import {buildAnimeBlock} from './anime-block.mjs';
 export class Scene{
   constructor({onStatus}){this.onStatus=onStatus;this.center=[108.94238,34.26101];this.effect='none';this.low=matchMedia('(prefers-reduced-motion: reduce)').matches;this.petals=!this.low;this.blossoms=[];this.canvas=document.querySelector('#weatherCanvas');this.ctx=this.canvas.getContext('2d');this.particles=[];this.tick=0;this.last=0;this.resize();new ResizeObserver(()=>this.resize()).observe(this.canvas);this.animate=this.animate.bind(this);requestAnimationFrame(this.animate);this.init();this.setPetals(this.petals);}
@@ -24,14 +24,14 @@ export class Scene{
       if(markerElement){this.marker?.remove();document.querySelector('.experience').append(markerElement);}
       clearTimeout(this.timeout);this.map?.remove();
       this.modelKey='';
-      this.map=new maplibregl.Map({container:'map',style,center:this.center,zoom:18.6,pitch:52,bearing:-28,antialias:true,attributionControl:true,maxPitch:65,maxZoom:21,minZoom:16.5,renderWorldCopies:false});
+      this.map=new maplibregl.Map({container:'map',style,center:this.center,zoom:20,pitch:38,bearing:-15,antialias:true,attributionControl:true,maxPitch:50,maxZoom:23,minZoom:17,renderWorldCopies:false,dragPan:false,dragRotate:false,scrollZoom:false,touchZoomRotate:false,touchPitch:false,doubleClickZoom:false,keyboard:false});
       this.map.on('load',()=>{
         const firstLabel=this.map.getStyle().layers.find(l=>l.type==='symbol')?.id;
         // A transparent tile layer ensures building tiles remain available to query.
         this.map.addLayer({id:'building-footprints',type:'fill',source:'openmaptiles','source-layer':'building',paint:{'fill-opacity':0}},firstLabel);
         this.map.addSource('anime-block',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:20,tolerance:0});
         this.map.addLayer({id:'building-shadows',type:'fill',source:'anime-block',filter:['==',['get','kind'],'shadow'],paint:{'fill-color':'#617e79','fill-opacity':.19}},firstLabel);
-        this.map.addLayer({id:'nearby-buildings',type:'fill-extrusion',source:'anime-block',filter:['!=',['get','kind'],'shadow'],paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':1,'fill-extrusion-vertical-gradient':false}},firstLabel);
+        this.map.addLayer({id:'nearby-buildings',type:'fill-extrusion',source:'anime-block',filter:['!=',['get','kind'],'shadow'],paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['*',['get','height'],.6],'fill-extrusion-base':['*',['get','base'],.6],'fill-extrusion-opacity':1,'fill-extrusion-vertical-gradient':false}},firstLabel);
         this.map.setLight({anchor:'map',color:'#fff0dc',intensity:.44,position:[1.5,210,35]});
         const el=document.querySelector('.scene-center');el.style.position='relative';el.style.left='auto';el.style.top='auto';
         this.marker=new maplibregl.Marker({element:el,anchor:'top'}).setLngLat(this.center).addTo(this.map);
@@ -41,6 +41,7 @@ export class Scene{
         this.map.on('click','nearby-buildings',()=>{document.querySelector('#sceneHint').textContent='建筑位置来自真实地图 · 屋顶、窗户和高度为艺术化表现';});
       });
       this.map.on('moveend',()=>this.updateModels());
+      this.map.on('resize',()=>this.constrainView(true));
       let errorShown=false;this.map.on('error',()=>{if(!errorShown){errorShown=true;this.onStatus('部分地图数据未载入，可重试或稍后查看',true);}});
       this.timeout=setTimeout(()=>{if(!this.map?.isStyleLoaded())this.onStatus('地图加载较慢，天气预报仍可使用',true);},20000);
     }catch(e){this.onStatus('地图暂不可用，请检查网络后重试',true);}
@@ -57,19 +58,27 @@ export class Scene{
   }
   updateArea(){
     if(!this.map?.getLayer('nearby-buildings'))return;
-    const area=nearbyArea(this.center);this.map.setMaxBounds(nearbyArea(this.center,250).bounds);
-    this.area=area;
     this.modelKey='';this.map.getSource('anime-block').setData({type:'FeatureCollection',features:[]});
-    if(this.map.getSource('nearby-circle')){this.map.getSource('nearby-circle').setData(area.circle);this.map.getSource('nearby-mask').setData(area.mask);return;}
-    this.map.addSource('nearby-circle',{type:'geojson',data:area.circle});
-    this.map.addSource('nearby-mask',{type:'geojson',data:area.mask});
-    this.map.addLayer({id:'nearby-mask',type:'fill',source:'nearby-mask',paint:{'fill-color':'#e7e9df','fill-opacity':1}});
-    this.map.addLayer({id:'nearby-border',type:'line',source:'nearby-circle',paint:{'line-color':'#aab5a2','line-width':2,'line-opacity':.5}});
   }
-  focus(animated=true){if(!this.map)return;const mobile=innerWidth<680;this.map.flyTo({center:this.center,zoom:mobile?16.9:17.7,padding:mobile?{left:0,right:0,top:20,bottom:0}:{left:170,right:0,top:0,bottom:30},duration:animated&&!this.low?1000:0});}
+  constrainView(fit=false){
+    if(!this.map||this.adjustingView)return;this.adjustingView=true;
+    try{
+      const minimum=closeViewZoom(this.map.getZoom(),this.map.getBounds().toArray());
+      this.map.setMinZoom(Math.max(17,Math.min(23,minimum)));
+      if(fit)this.map.jumpTo({zoom:this.map.getMinZoom()});
+      // Re-evaluate after the camera update so the label describes the actual ground view.
+      const span=viewSpanMeters(this.map.getBounds().toArray());
+      document.querySelector('#map').dataset.viewSpan=span.toFixed(2);
+      document.querySelector('.radius-badge').textContent=`近景 ${Math.min(100,Math.ceil(span))} 米 · 上限 100 米`;
+      document.querySelector('#zoomOut').disabled=this.map.getZoom()<=this.map.getMinZoom()+.01;
+      document.querySelector('#zoomIn').disabled=this.map.getZoom()>=23;
+    }finally{this.adjustingView=false;}
+  }
+  focus(){if(!this.map)return;this.map.jumpTo({center:this.center,padding:{left:0,right:0,top:100,bottom:0}});this.constrainView(true);}
   setLocation(lon,lat){this.center=[lon,lat];this.marker?.setLngLat(this.center);this.updateArea();this.focus();}
-  toggleTilt(){if(!this.map)return true;const tilted=this.map.getPitch()<10;this.map.easeTo({pitch:tilted?52:0,bearing:tilted?-28:0,duration:this.low?0:800});return tilted;}
-  rotate(){if(this.map)this.map.easeTo({bearing:this.map.getBearing()+45,duration:this.low?0:600});}
+  toggleTilt(){if(!this.map)return true;const tilted=this.map.getPitch()<10;this.map.jumpTo({pitch:tilted?38:0,bearing:tilted?-15:0});this.constrainView(true);return tilted;}
+  rotate(){if(this.map){this.map.jumpTo({bearing:this.map.getBearing()+45});this.constrainView();}}
+  zoom(delta){if(this.map){this.map.jumpTo({zoom:Math.max(this.map.getMinZoom(),Math.min(23,this.map.getZoom()+delta))});this.constrainView();}}
   setEffect(effect,wind=0,precip=0){this.effect=effect;document.querySelector('.experience').dataset.weather=effect;this.wind=Math.min(10,Math.max(0,wind||0))/10;this.intensity=Math.min(1,Math.max(.3,(precip||.6)/4));document.querySelector('#fog').style.opacity=effect==='fog'?.8:effect==='cloud'?.12:effect==='rain'?.22:0;this.particles=[];}
   setLow(value){this.low=value;this.particles=[];this.blossoms=[];}
   setPetals(value){this.petals=value;this.blossoms=[];document.querySelector('.experience').dataset.petals=String(value);}
@@ -102,3 +111,5 @@ export class Scene{
     for(let i=0;i<this.particles.length;i++){let p=this.particles[i];p.y+=(snow?.6:11)*p.z*dt;p.x+=(snow?Math.sin(now/1800+p.s)*.35:1.4+this.wind)*p.z*dt;if(p.y>this.h+25||p.x>this.w+100)this.particles[i]=p=this.particle();c.beginPath();if(snow){c.fillStyle=`rgba(239,246,239,${p.z*.8})`;c.arc(p.x,p.y,1+p.z*2,0,Math.PI*2);c.fill();}else{c.strokeStyle=`rgba(77,124,153,${p.z*.65})`;c.lineWidth=.5+p.z*.5;c.moveTo(p.x,p.y);c.lineTo(p.x-(1.5+this.wind)*p.z,p.y-17*p.z);c.stroke();}}
   }
 }
+
+

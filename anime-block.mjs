@@ -27,6 +27,11 @@ function inside(point,ring){
  }return hit;
 }
 const inPolygon=(p,rings)=>inside(p,rings[0])&&!rings.slice(1).some(r=>inside(p,r));
+function wallDetail(a,b,t,width,depth=.16){
+ const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy),ux=dx/len,uy=dy/len;
+ const x=a[0]+dx*t,y=a[1]+dy*t;
+ return [[-width/2,-depth],[width/2,-depth],[width/2,depth],[-width/2,depth]].map(([u,v])=>[x+ux*u-uy*v,y+uy*u+ux*v]);
+}
 export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]){
  const features=[],seen=new Set(),occupied=[],sx=METERS*Math.cos(center[1]*Math.PI/180);
  const local=p=>[(p[0]-center[0])*sx,(p[1]-center[1])*METERS];
@@ -64,6 +69,19 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
    if(bell){
     add(rings.map(r=>r.map(v=>[v[0]+7,v[1]-6])),'shadow',0,0,'#667b78');
     add(rings,'wall',0,7.5,'#a4ac9c');
+    for(let e=0;e<outer.length;e++){
+     const a=outer[e],b=outer[(e+1)%outer.length],len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+     if(len<8)continue;
+     // Recessed-looking arch and fine masonry courses on the mapped base.
+     for(let z=1.3;z<7;z+=1.3)add([wallDetail(a,b,.5,len,.08)],'trim',z,z+.045,'#c4c7b5');
+     add([wallDetail(a,b,.5,5.4,.2)],'trim',0,3.4,'#d2c5a4');
+     add([wallDetail(a,b,.5,4.6,.24)],'window',0,3.2,'#506764');
+     for(let i=0;i<6;i++){
+      const width=4.6*Math.sqrt(1-((i+.5)/6)**2);
+      add([wallDetail(a,b,.5,width+.6,.2)],'trim',3.2+i*.3,3.5+i*.3,'#d2c5a4');
+      add([wallDetail(a,b,.5,width,.24)],'window',3.2+i*.3,3.5+i*.3,'#506764');
+     }
+    }
     add(scale(.98),'trim',7.5,8.1,'#d5cfb3');
     for(const [s,z,h] of [[.7,8.1,15],[.48,18,23],[.28,26,29]]){
      add(scale(s),'wall',z,h,'#b66d55');
@@ -71,6 +89,12 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
      for(let e=0;e<r.length;e++){
       const a=r[e],b=r[(e+1)%r.length],dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy);
       if(len<3)continue;
+      for(let n=0;n<5;n++){
+       const pane=wallDetail(a,b,(n+.5)/5,len/5*.64,.18);
+       add([pane],'window',z+1,h-1,'#526c65');
+       add([wallDetail(a,b,(n+.5)/5,len/5*.7,.22)],'trim',z+1.7,z+1.82,'#d8b68a');
+      }
+      add([wallDetail(a,b,.5,len,.23)],'trim',z+.7,z+.86,'#e0bd8d');
       for(let n=1;n<5;n++){
        const x=a[0]+dx*n/5,y=a[1]+dy*n/5;
        const post=[[-.3,-.3],[.3,-.3],[.3,.3],[-.3,.3]].map(v=>[x+v[0],y+v[1]]);
@@ -87,6 +111,7 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
    // Small ground shadow is clipped to the same 100 m disc.
    add(rings.map(r=>r.map(v=>[v[0]+height*.24,v[1]-height*.17])),'shadow',0,0,'#667b78');
    add(rings,'wall',base,height,WALLS[color]);
+   add(rings,'trim',base,base+.45,'#c1baaa');
    add(rings,'trim',Math.max(base,height-.35),height+.12,'#f9efd8');
    const pitched=height<19&&rings.length===1&&outer.length<=5;
    const steps=pitched?7:1;
@@ -104,6 +129,9 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
       const z=base+floor*3.2+1.1;
       if(z+1.3>height-.4)continue;
       add([rect],'window',z,z+1.3,(seed+floor+n)%5===0?'#f9d89d':'#72969f');
+      add([wallDetail(a,b,t,w*2+.2,.18)],'trim',z-.13,z,'#faf0dc');
+      add([wallDetail(a,b,t,.075,.15)],'trim',z,z+1.3,'#ece1c9');
+      add([wallDetail(a,b,t,w*2,.15)],'trim',z+.66,z+.73,'#ece1c9');
      }
     }
    }

@@ -24,7 +24,18 @@ export class PersonalAudio{
     finally{this.initializing=false;btn.disabled=false;}
   }
   stop(){clearInterval(this.timer);if(this.recorder?.state==='recording')this.recorder.stop();this.stream?.getTracks().forEach(t=>t.stop());this.recording=false;const btn=document.querySelector('#recordBtn');btn.textContent='● 重新录音';btn.classList.remove('recording');document.querySelector('#recordStatus').textContent='最多 30 秒 · 仅存此浏览器';}
-  stopPlayback(){if(typeof speechSynthesis!=='undefined')speechSynthesis.cancel();this.player?.pause();}
-  async playReminder(){if(!this.blob||!document.querySelector('#personalEnabled').checked)return;this.player=new Audio(this.url);try{await this.player.play();}catch{this.toast('浏览器限制了自动播放，可在“我的声音”中点击试听。');}}
-  speak(text){this.stopPlayback();if(!('speechSynthesis'in window)){this.toast('当前浏览器不支持文字播报。');this.playReminder();return;}const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';u.rate=.9;const v=speechSynthesis.getVoices().find(v=>/zh[-_]CN/i.test(v.lang))||speechSynthesis.getVoices().find(v=>/zh/i.test(v.lang));if(v)u.voice=v;u.onend=()=>this.playReminder();u.onerror=e=>{if(e.error!=='canceled'&&e.error!=='interrupted')this.toast('系统语音暂不可用，可在“我的声音”中播放录音。');};this.utterance=u;speechSynthesis.speak(u);}
+  stopPlayback(){clearTimeout(this.speechTimer);if(this.utterance){this.utterance.onend=null;this.utterance.onerror=null;this.utterance.onstart=null;}if(typeof speechSynthesis!=='undefined')speechSynthesis.cancel();this.player?.pause();}
+  async playReminder(force=false){if(!this.blob||(!force&&!document.querySelector('#personalEnabled').checked))return false;this.player?.pause();this.player=new Audio(this.url);try{await this.player.play();this.toast('正在播放你的原声提醒。');return true;}catch{this.toast('录音未能播放，请在“我的声音”中点击播放器的播放键。');return false;}}
+  speak(text){
+   this.stopPlayback();let finished=false;
+   const fallback=()=>{if(finished)return;finished=true;clearTimeout(this.speechTimer);this.playReminder().then(played=>{if(!played)this.toast('设备语音未能启动。请试试“播放我的录音”，或在设备设置中安装中文语音。');});};
+   if(!('speechSynthesis'in window)){fallback();return;}
+   const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';u.rate=.94;
+   const voices=speechSynthesis.getVoices(),v=voices.find(v=>/zh[-_]CN/i.test(v.lang))||voices.find(v=>/zh/i.test(v.lang));if(v)u.voice=v;
+   u.onstart=()=>{clearTimeout(this.speechTimer);this.toast('正在播报，请确认手机媒体音量已开启。');};
+   u.onend=()=>{clearTimeout(this.speechTimer);if(!finished){finished=true;this.playReminder();}};
+   u.onerror=e=>{clearTimeout(this.speechTimer);if(e.error!=='canceled'&&e.error!=='interrupted')fallback();};
+   this.utterance=u;this.speechTimer=setTimeout(()=>{fallback();speechSynthesis.cancel();},8000);
+   this.toast('正在启动设备语音…');try{speechSynthesis.resume();speechSynthesis.speak(u);}catch{fallback();}
+  }
 }

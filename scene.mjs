@@ -5,7 +5,7 @@ export class Scene{
   async init(){
     try{
       if(!window.maplibregl)throw new Error('地图组件未加载');
-      this.onStatus('正在铺开长安的街巷…');
+      this.onStatus('正在展开身边的街巷…');
       const response=await fetch('https://tiles.openfreemap.org/styles/positron',{signal:AbortSignal.timeout(18000)});if(!response.ok)throw new Error('地图服务未响应');
       const style=await response.json();
       for(const l of style.layers){

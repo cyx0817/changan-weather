@@ -103,7 +103,12 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
      }
     }
     for(const [s,z] of [[.96,14.7],[.73,22.7],[.52,28.7]])for(let i=0;i<9;i++){
-     add(scale(s*(1-i*.075)),'roof',z+i*.4,z+(i+1)*.4,i===0?'#9a9b76':'#718b81');
+     const tier=scale(s*(1-i*.075));
+     add(tier,'roof',z+i*.4,z+(i+1)*.4,i===0?'#9a9b76':'#718b81');
+     for(let e=0;e<tier[0].length;e++){
+      const a=tier[0][e],b=tier[0][(e+1)%tier[0].length],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      add([wallDetail(a,b,.5,length,.06)],'roof-seam',z+(i+1)*.4,z+(i+1)*.4+.055,'#adbaa1');
+     }
     }
     add(scale(.035),'roof',32.3,35,'#c7ae72');
     continue;
@@ -116,6 +121,24 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
    const pitched=height<19&&rings.length===1&&outer.length<=5;
    const steps=pitched?7:1;
    for(let i=0;i<steps;i++)add(scale(pitched?1-i*.075:.98),'roof',height+i*.42,height+(i+1)*.42,ROOFS[color]);
+   if(pitched)for(let i=0;i<steps;i++){
+    const tier=scale(1-i*.075)[0];
+    for(let e=0;e<tier.length;e++){
+     const a=tier[e],b=tier[(e+1)%tier.length],len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+     add([wallDetail(a,b,.5,len,.045)],'roof-seam',height+(i+1)*.42,height+(i+1)*.42+.04,'#d8d6b9');
+    }
+   }
+   // Illustrative entrance anchored to one mapped, ground-level wall.
+   let entranceEdge=-1;
+   if(base===0&&height>4)entranceEdge=outer.findIndex((a,e)=>Math.hypot(outer[(e+1)%outer.length][0]-a[0],outer[(e+1)%outer.length][1]-a[1])>6);
+   if(entranceEdge>=0){
+    const a=outer[entranceEdge],b=outer[(entranceEdge+1)%outer.length];
+    add([wallDetail(a,b,.5,2.4,.22)],'entrance',0,2.75,'#a9967b');
+    add([wallDetail(a,b,.5,1.9,.25)],'entrance',0,2.45,'#567777');
+    add([wallDetail(a,b,.5,.07,.28)],'trim',0,2.45,'#decba6');
+    add([wallDetail(a,b,.5,3.3,.65)],'awning',2.8,3.02,ROOFS[color]);
+    add([wallDetail(a,b,.5,3.3,.68)],'trim',2.72,2.8,'#f9eacb');
+   }
    // Windows are thin vertical prisms following the original outer walls.
    const floors=Math.min(12,Math.floor((height-base)/3.2));
    for(let e=0;e<outer.length&&e<60;e++){
@@ -128,7 +151,10 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
      for(let floor=0;floor<floors&&features.length<6000;floor++){
       const z=base+floor*3.2+1.1;
       if(z+1.3>height-.4)continue;
+      if(e===entranceEdge&&floor===0&&Math.abs(t-.5)*length<1.8)continue;
+      add([wallDetail(a,b,t,w*2+.28,.10)],'window-frame',z-.12,z+1.43,'#f8edda');
       add([rect],'window',z,z+1.3,(seed+floor+n)%5===0?'#f9d89d':'#72969f');
+      add([wallDetail(a,b,t,w*1.6,.145)],'window-glint',z+1.06,z+1.14,'#d7ebdf');
       add([wallDetail(a,b,t,w*2+.2,.18)],'trim',z-.13,z,'#faf0dc');
       add([wallDetail(a,b,t,.075,.15)],'trim',z,z+1.3,'#ece1c9');
       add([wallDetail(a,b,t,w*2,.15)],'trim',z+.66,z+.73,'#ece1c9');
@@ -145,6 +171,12 @@ export function buildAnimeBlock(input,center,radius=NEARBY_RADIUS,greenSpaces=[]
   const edge=crown(x,y,2.9);
   if(!parks.some(p=>edge.every(v=>inPolygon(v,p)))||occupied.some(p=>edge.some(v=>inPolygon(v,p))||inPolygon([x,y],p)))continue;
   trees++;
+  // Low planter rim and a little paving stay inside the already-checked green footprint.
+  add([crown(x,y,2.7),crown(x,y,2.45)],'planter',0,.28,'#d6c7b3');
+  for(let j=-1;j<=1;j++){
+   const yy=y-2.1;
+   add([[[x+j*.65-.29,yy-.24],[x+j*.65+.29,yy-.24],[x+j*.65+.29,yy+.24],[x+j*.65-.29,yy+.24]]],'garden-stone',.01,.05,'#eee5d0');
+  }
   add([crown(x,y,.24)],'tree',0,3.5,'#a78b79');
   const blooming=trees%3!==0;
   // Five small crowns make a rounder, layered silhouette than a single stack.
